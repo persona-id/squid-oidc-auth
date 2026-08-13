@@ -1,0 +1,82 @@
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache: true
+          go-version-file: .tool-versions
+
+      - name: Check the pinned versions agree
+        run: make check-versions
+
+      - name: Build
+        run: go build ./...
+
+      - name: Check go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+
+      # The response encoder is where token-derived data reaches a line-oriented
+      # wire format, so it gets a short soak on every run.
+      - name: Fuzz the response encoder
+        run: go test -run='^$' -fuzz=FuzzResponseEncode -fuzztime=30s ./internal/protocol/
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache: true
+          go-version-file: .tool-versions
+
+      # install-only, so the lint and format checks below run through the same
+      # make targets as they do locally. The version still comes from
+      # .tool-versions, and the binary is the official release rather than one
+      # built from source.
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          install-only: true
+          version-file: .tool-versions
+
+      - name: Check formatting
+        run: make fmt-check
+
+      - name: Lint
+        run: make lint
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache: true
+          go-version-file: .tool-versions
+
+      - name: Run govulncheck
+        run: make vulncheck
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read

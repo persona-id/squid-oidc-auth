@@ -1,0 +1,8 @@
+/bin/
+/dist/
+
+# Real configuration, as opposed to the examples in configs/.
+/squid-oidc-auth.yaml
+
+# Fuzzing corpora found locally; the seed corpus lives in the test source.
+testdata/fuzz/

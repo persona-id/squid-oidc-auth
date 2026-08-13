@@ -1,0 +1,72 @@
+# Example Squid configuration for squid-oidc-auth.
+#
+# The helper answers who a client is; the http_access rules below decide where
+# it may go. Run scripts/check-annotation-support.sh against your Squid build
+# before relying on the `note` ACLs - see docs/annotations.md.
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+# --concurrent must be present if and only if concurrency= is set below.
+auth_param basic program /usr/local/bin/squid-oidc-auth --concurrent --config /etc/squid-oidc-auth.yaml
+auth_param basic children 8 startup=2 idle=1 concurrency=16
+auth_param basic realm OIDC proxy
+
+# Squid caches credentials by user+password for this long without re-consulting
+# the helper. Keep it well under the token lifetime, since a cached OK survives
+# the token that produced it.
+auth_param basic credentialsttl 2 minutes
+auth_param basic casesensitive on
+
+acl authenticated proxy_auth REQUIRED
+
+# ---------------------------------------------------------------------------
+# Identity, from the claims the helper projected
+# ---------------------------------------------------------------------------
+
+acl ci_org      note oidc_organization_slug persona-id
+acl ci_deploy   note oidc_pipeline_slug     deploy-api deploy-web
+acl ci_main     note oidc_build_branch      main
+
+# ---------------------------------------------------------------------------
+# Destinations
+# ---------------------------------------------------------------------------
+
+acl internal_apis dstdomain .internal.example.com
+acl package_repos dstdomain .npmjs.org .rubygems.org registry.terraform.io
+
+acl SSL_ports port 443
+acl Safe_ports port 80 443
+acl CONNECT method CONNECT
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+
+# Authenticate first, so later rules can rely on the annotations being present.
+http_access deny !authenticated
+
+# Deploy pipelines building main may reach internal services.
+http_access allow authenticated ci_org ci_deploy ci_main internal_apis
+
+# Any build in our organization may fetch dependencies.
+http_access allow authenticated ci_org package_repos
+
+http_access deny all
+
+http_port 3128
+
+# Log the verified identity from the annotations, not %ul. Under the Basic
+# scheme the username is whatever login the client put before the colon and a
+# helper cannot override it, so %ul is unverified and attacker-chosen.
+#
+# Read these two fields only on allowed requests. On Squid 6.13 a denied request
+# whose login had authenticated earlier was observed still logging that earlier
+# request's values, so on a 4xx line they describe the login rather than the
+# credential just refused.
+logformat oidc %ts.%03tu %6tr %>a %Ss/%03>Hs %<st %rm %ru %note{auth_policy} %note{oidc_organization_slug} %Sh/%<a %mt
+access_log stdio:/var/log/squid/access.log oidc

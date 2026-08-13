@@ -1,0 +1,24 @@
+# Local Squid with squid-oidc-auth, for trying the helper against a real proxy
+# and a real token.
+#
+#   docker compose -f deployments/docker-compose.yaml up --build
+#
+#   export https_proxy="http://ci:$TOKEN@localhost:3128"
+#   curl -v https://example.com/
+#
+# Edit deployments/squid-oidc-auth.yaml first: its issuer, audience, and require
+# block must match your provider and tenant.
+
+services:
+  squid:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile.squid
+    ports:
+      - "3128:3128"
+    # Squid logs to stdout via the access_log line in squid.conf; the helper
+    # logs to stderr. Both land here.
+    stop_grace_period: 5s
+    volumes:
+      - ../configs/squid.conf.example:/etc/squid/squid.conf:ro
+      - ./squid-oidc-auth.yaml:/etc/squid-oidc-auth.yaml:ro

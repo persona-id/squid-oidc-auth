@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+archives:
+  - files:
+      - README.md
+      - configs/*
+      - docs/*
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: squid-oidc-auth
+    env:
+      # Static, so the binary runs in whatever container Squid lives in without
+      # dragging a libc along.
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goarch:
+      - amd64
+      - arm64
+    goos:
+      # darwin is for running the test suite and `make snapshot` locally; Squid
+      # itself is only ever deployed on linux here.
+      - darwin
+      - linux
+    id: squid-oidc-auth
+    ldflags:
+      - -s -w -X main.commit={{ .FullCommit }} -X main.version={{ .Version }}
+    main: ./cmd/squid-oidc-auth
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+changelog:
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^test:"
+  sort: asc
+  use: github
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - annotations:
+      org.opencontainers.image.description: >-
+        Squid authentication helper accepting OIDC tokens as the proxy password.
+        Not a service: copy the binary into your Squid image.
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+    dockerfile: build/package/Dockerfile
+    id: squid-oidc-auth
+    ids:
+      - squid-oidc-auth
+    images:
+      - ghcr.io/persona-id/squid-oidc-auth
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{ .Major }}.{{ .Minor }}"
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+
+project_name: squid-oidc-auth
+
+release:
+  footer: |
+    ## Installing
+
+    This helper runs as a child process of Squid, so the binary has to live
+    alongside it. Copy it out of the image:
+
+    ```dockerfile
+    FROM ghcr.io/persona-id/squid-oidc-auth:{{ .Version }} AS helper
+    FROM ubuntu/squid:latest
+    COPY --from=helper /usr/local/bin/squid-oidc-auth /usr/local/bin/
+    ```
+
+    Or take the archive below for a host install.
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+version: 2

@@ -1,0 +1,19 @@
+# Configuration used by deployments/docker-compose.yaml.
+#
+# Point `issuer` at your provider and change `require` to a claim identifying
+# your tenant before using this. The audience must match what the client asks
+# the provider for.
+
+issuers:
+  ci:
+    annotations:
+      - build_branch
+      - organization_slug
+      - pipeline_slug
+    audiences:
+      - https://proxy.example.com
+    issuer: https://agent.buildkite.com
+    max_ttl: 2m
+    require:
+      organization_slug: persona-id
+    username_template: "{{.organization_slug}}/{{.pipeline_slug}}"

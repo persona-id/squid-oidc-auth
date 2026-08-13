@@ -1,0 +1,33 @@
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/persona-id/squid-oidc-auth
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - misspell
+    - nilerr
+    - revive
+    - unconvert
+    - wastedassign
+    - whitespace
+  exclusions:
+    rules:
+      # Test helpers legitimately return the same fake error repeatedly.
+      - linters:
+          - errorlint
+        path: _test\.go
+  settings:
+    revive:
+      rules:
+        - name: exported
+
+version: "2"

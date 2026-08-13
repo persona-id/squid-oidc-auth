@@ -1,0 +1,79 @@
+# Example configuration for squid-oidc-auth.
+#
+# The helper verifies the OIDC token a client supplies as its proxy password and
+# reports the identity to Squid. Authorization - who may reach what - lives in
+# squid.conf, matched against the annotations projected below.
+#
+# Several entries may share an issuer URL. Tokens are routed by their iss claim
+# to that issuer's policies, and the first in name order whose audiences and
+# require both accept the token decides the identity - which is how two tenants
+# of one provider get different usernames or annotations.
+
+issuers:
+  # A CI system minting workload identity tokens. Claim names here are
+  # Buildkite's; GitHub Actions, GitLab and the rest differ only in naming.
+  #
+  # Claims listed under `annotations` are projected as oidc_<claim> for `note`
+  # ACLs. A claim the token does not carry is omitted, so a `note` ACL on it
+  # will not match.
+  #
+  # auth_policy is sent for every token, naming the entry below that accepted
+  # it. Its key is set by policy_annotation rather than annotation_prefix, so a
+  # provider with its own "policy" claim still has somewhere to project it; set
+  # policy_annotation to "" to send nothing.
+  ci:
+    annotations:
+      - build_branch
+      - build_number
+      - organization_slug
+      - pipeline_slug
+      - step_key
+
+    # What the client asked the provider for. Most providers let the caller
+    # choose this freely, which is why it is not an identity check.
+    audiences:
+      - https://proxy.example.com
+
+    issuer: https://agent.buildkite.com
+
+    # Caps how long Squid may reuse an answer. The effective ttl= is the lesser
+    # of this and the token's remaining lifetime, so a cached OK never outlives
+    # the token that earned it. Set credentialsttl in squid.conf below the token
+    # lifetime too, since the basic scheme may ignore ttl=.
+    max_ttl: 2m
+
+    # REQUIRED, and the most important key in this file.
+    #
+    # A hosted issuer signs for every customer of that provider, and the
+    # audience is usually caller-chosen. Without a tenant claim here, anyone
+    # with an account at the same provider could mint a token carrying your
+    # audience and authenticate to your proxy.
+    #
+    # Claims are AND'd together, and each claim's values are OR'd. A claim takes
+    # a single value or a list, and values are compared exactly.
+    require:
+      organization_slug: persona-id
+
+    # A Go template over the claims, naming the identity in the helper's own
+    # logs. Referencing a claim the provider did not send fails the lookup
+    # rather than producing an empty or shared username.
+    #
+    # Squid keeps the client's login as the transaction username whatever the
+    # helper answers, so gate on the annotations and log them with %note{...}.
+    # Set verify_username to have the helper reject a login that does not match,
+    # which makes %ul and proxy_auth meaningful.
+    username_template: "{{.organization_slug}}/{{.pipeline_slug}}"
+
+  # Human traffic through the same proxy - the same schema over different
+  # claims.
+  people:
+    annotations:
+      - email
+      - hd
+    audiences:
+      - 000000000000-example.apps.googleusercontent.com
+    issuer: https://accounts.google.com
+    max_ttl: 5m
+    require:
+      hd: example.com
+    username_template: "{{.email}}"

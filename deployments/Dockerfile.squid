@@ -1,0 +1,25 @@
+# Squid with the helper binary installed alongside it.
+#
+# The released image in build/package/ carries the helper alone, for deployments
+# that run Squid from their own image. This one exists so docker-compose can
+# bring up a complete, working proxy in one command.
+
+# Kept in step with .tool-versions by `make check-versions`.
+ARG GO_VERSION=1.26.5
+
+FROM golang:${GO_VERSION} AS build
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd/ cmd/
+COPY internal/ internal/
+
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
+    -o /out/squid-oidc-auth ./cmd/squid-oidc-auth
+
+FROM ubuntu/squid:latest
+
+COPY --from=build /out/squid-oidc-auth /usr/local/bin/squid-oidc-auth
