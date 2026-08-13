@@ -20,10 +20,14 @@
 # Deliberately no ENTRYPOINT and no USER: the default shell is what makes the
 # copy-out work, and writing to a bind mount usually needs root.
 #
-# GoReleaser cross-compiles the binary and places it at the root of the build
-# context, so there is no Go toolchain here and nothing to keep in step with
-# .tool-versions. A bare `docker build` will fail for want of that binary; use
+# GoReleaser cross-compiles the binaries and stages them under one directory per
+# target platform, so there is no Go toolchain here and nothing to keep in step
+# with .tool-versions. A bare `docker build` will fail for want of them; use
 # `make snapshot`, which runs the real pipeline.
 FROM busybox:1.37-uclibc
 
-COPY squid-oidc-auth /usr/local/bin/squid-oidc-auth
+# Supplied by buildx and redeclared here to be usable in this stage. It selects
+# the matching binary from the staged layout, which is <os>/<arch>/<binary>.
+ARG TARGETPLATFORM
+
+COPY $TARGETPLATFORM/squid-oidc-auth /usr/local/bin/squid-oidc-auth
