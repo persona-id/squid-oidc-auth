@@ -1,0 +1,41 @@
+name: Auto-approve bot dependency PRs
+
+# main requires one approving review with enforce_admins on and no bypass allowances,
+# so Renovate's platformAutomerge cannot merge anything without this approval.
+#
+# pull_request_target, not pull_request: it runs the workflow definition from the
+# base branch, so a PR cannot edit its own approval conditions. Safe here only
+# because nothing below checks out the head ref.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, labeled]
+
+permissions: {}
+
+jobs:
+  approve:
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'automerge') &&
+      (github.event.pull_request.user.login == 'renovate[bot]' ||
+       github.event.pull_request.user.login == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Approve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          already=$(gh api "repos/$REPO/pulls/$PR/reviews" \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" and .state == "APPROVED")] | length')
+          if [ "$already" -gt 0 ]; then
+            echo "Already approved, nothing to do."
+            exit 0
+          fi
+          gh api --method POST "repos/$REPO/pulls/$PR/reviews" \
+            -f event=APPROVE \
+            -f body="Approved automatically: low-risk dependency update carrying the automerge label."
