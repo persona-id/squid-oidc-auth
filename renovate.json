@@ -2,5 +2,32 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Enable indirect (transitive) Go module updates, off by default in Renovate",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "minimumReleaseAge": "7 days",
+      "enabled": true
+    },
+    {
+      "description": "Low-risk: Go module minor and patch",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "minimumReleaseAge": "7 days",
+      "addLabels": ["automerge"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Low-risk: GitHub Actions minor and patch",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "addLabels": ["automerge"],
+      "automerge": true,
+      "platformAutomerge": true
+    }
   ]
 }
