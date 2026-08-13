@@ -24,7 +24,7 @@
 # target platform, so there is no Go toolchain here and nothing to keep in step
 # with .tool-versions. A bare `docker build` will fail for want of them; use
 # `make snapshot`, which runs the real pipeline.
-FROM busybox:1.37-uclibc
+FROM busybox:1.38-uclibc
 
 # Supplied by buildx and redeclared here to be usable in this stage. It selects
 # the matching binary from the staged layout, which is <os>/<arch>/<binary>.
