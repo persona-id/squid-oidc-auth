@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,7 +187,7 @@ issuers:
     require:
       organization_slug: persona-id
 `,
-			wantErr: "must use http or https",
+			wantErr: "must use https",
 		},
 		"annotation collides with a reserved key": {
 			body: `
@@ -475,5 +476,48 @@ issuers:
 
 	if got := cfg.Issuers["ci"].PolicyAnnotationKey(); got != "" {
 		t.Errorf("PolicyAnnotationKey() = %q, want it disabled", got)
+	}
+}
+
+// TestLoadIssuerURLScheme covers the transport the key set is fetched over.
+// Discovery and the JWKS come from this URL, so over plaintext anyone on the
+// path can publish their own signing keys and mint tokens the helper accepts.
+func TestLoadIssuerURLScheme(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		issuer  string
+		wantErr bool
+	}{
+		"https":                    {issuer: "https://issuer.example.com"},
+		"http to a remote host":    {issuer: "http://issuer.example.com", wantErr: true},
+		"http to 127.0.0.1":        {issuer: "http://127.0.0.1:9099"},
+		"http to ::1":              {issuer: "http://[::1]:9099"},
+		"http to localhost":        {issuer: "http://localhost:9099"},
+		"http to a lookalike host": {issuer: "http://127.0.0.1.example.com", wantErr: true},
+		"no scheme":                {issuer: "issuer.example.com", wantErr: true},
+		"non-http scheme":          {issuer: "ftp://issuer.example.com", wantErr: true},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := config.Load(write(t, fmt.Sprintf(`
+issuers:
+  ci:
+    audiences: [https://proxy.example.com]
+    issuer: %s
+    require: {organization_slug: persona-id}
+`, tc.issuer)))
+
+			if tc.wantErr && err == nil {
+				t.Fatalf("Load(%s) error = nil, want it rejected", tc.issuer)
+			}
+
+			if !tc.wantErr && err != nil {
+				t.Fatalf("Load(%s) error = %v, want nil", tc.issuer, err)
+			}
+		})
 	}
 }
