@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/netip"
 	"net/url"
 	"os"
 	"slices"
@@ -306,6 +307,39 @@ func (i *Issuer) validateAnnotations() error {
 	return i.validatePolicyAnnotation()
 }
 
+func (i *Issuer) validateIssuerURL() error {
+	if i.Issuer == "" {
+		return errors.New("issuer is required")
+	}
+
+	parsed, err := url.Parse(i.Issuer)
+	if err != nil {
+		return fmt.Errorf("parsing issuer URL %q: %w", i.Issuer, err)
+	}
+
+	// Checked before the host, so a bare "issuer.example.com" is reported as the
+	// missing scheme it is rather than as a URL without a host.
+	//
+	// Discovery and the key set are fetched from this URL, so over plaintext
+	// anyone on the path can serve their own signing keys and mint tokens this
+	// helper would accept. Loopback is exempt so tests can run a local issuer.
+	secure := parsed.Scheme == "https" ||
+		(parsed.Scheme == "http" && isLoopback(parsed.Hostname()))
+	if !secure {
+		return fmt.Errorf(
+			"issuer URL %q must use https, or http with a loopback host: "+
+				"over plaintext the signing keys can be replaced in transit",
+			i.Issuer,
+		)
+	}
+
+	if parsed.Host == "" {
+		return fmt.Errorf("issuer URL %q has no host", i.Issuer)
+	}
+
+	return nil
+}
+
 func (i *Issuer) validatePolicyAnnotation() error {
 	key := i.PolicyAnnotationKey()
 	if key == "" {
@@ -321,29 +355,6 @@ func (i *Issuer) validatePolicyAnnotation() error {
 			"policy_annotation %q collides with a key Squid reserves (%s)",
 			key, strings.Join(reservedKeys, ", "),
 		)
-	}
-
-	return nil
-}
-
-func (i *Issuer) validateIssuerURL() error {
-	if i.Issuer == "" {
-		return errors.New("issuer is required")
-	}
-
-	parsed, err := url.Parse(i.Issuer)
-	if err != nil {
-		return fmt.Errorf("parsing issuer URL %q: %w", i.Issuer, err)
-	}
-
-	// http is allowed so tests can point at a local issuer; anything else is a
-	// configuration mistake rather than a deployment choice.
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("issuer URL %q must use http or https", i.Issuer)
-	}
-
-	if parsed.Host == "" {
-		return fmt.Errorf("issuer URL %q has no host", i.Issuer)
 	}
 
 	return nil
@@ -402,4 +413,16 @@ func (v *Values) UnmarshalYAML(node *yaml.Node) error {
 	default:
 		return fmt.Errorf("line %d: expected a string or a list of strings", node.Line)
 	}
+}
+
+// isLoopback reports whether host addresses only this machine, where plaintext
+// discovery cannot be intercepted by a third party.
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+
+	address, err := netip.ParseAddr(host)
+
+	return err == nil && address.IsLoopback()
 }

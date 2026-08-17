@@ -15,7 +15,9 @@ services:
       context: ..
       dockerfile: deployments/Dockerfile.squid
     ports:
-      - "3128:3128"
+      # Loopback only. A bare "3128:3128" would publish on every interface,
+      # putting a proxy that reaches your internal networks on the LAN.
+      - "127.0.0.1:3128:3128"
     # Squid logs to stdout via the access_log line in squid.conf; the helper
     # logs to stderr. Both land here.
     stop_grace_period: 5s
