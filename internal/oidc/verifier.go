@@ -23,6 +23,17 @@ import (
 	"github.com/persona-id/squid-oidc-auth/internal/config"
 )
 
+// signingAlgorithms are the signatures this helper will check. All are
+// asymmetric: a symmetric algorithm would let anyone holding the provider's
+// published key sign tokens with it, so none is accepted however the provider
+// advertises itself.
+var signingAlgorithms = []string{
+	goidc.EdDSA,
+	goidc.ES256, goidc.ES384, goidc.ES512,
+	goidc.PS256, goidc.PS384, goidc.PS512,
+	goidc.RS256, goidc.RS384, goidc.RS512,
+}
+
 var (
 	// ErrAudienceMismatch reports a token issued for an audience this helper
 	// does not serve.
@@ -119,7 +130,16 @@ func NewVerifier(ctx context.Context, cfg *config.Config) (*Verifier, error) {
 
 			// go-oidc checks a single client ID; audience is checked in Verify
 			// so that a list of accepted audiences behaves the same as one.
-			results[i].verifier = provider.Verifier(&goidc.Config{SkipClientIDCheck: true})
+			//
+			// Left unset, SupportedSigningAlgs would come from the provider's
+			// discovery document, letting the issuer decide what counts as a
+			// signature. Pinning asymmetric algorithms here means a provider
+			// that advertises an HMAC algorithm cannot turn a public value into
+			// a signing key.
+			results[i].verifier = provider.Verifier(&goidc.Config{
+				SkipClientIDCheck:    true,
+				SupportedSigningAlgs: signingAlgorithms,
+			})
 		})
 	}
 

@@ -91,6 +91,8 @@ Several entries may share an `issuer` URL. Tokens are routed by their `iss` clai
 
 Configuration is validated at startup, and unknown fields are rejected - a typo in a `require` key would otherwise be dropped silently, widening who the proxy trusts.
 
+Only asymmetric signatures are accepted: `EdDSA`, `ES256/384/512`, `PS256/384/512`, and `RS256/384/512`. The set is fixed rather than read from the provider's discovery document, so a provider cannot nominate an HMAC algorithm and turn its own published verification key into a signing key. A provider signing with anything else will be rejected at verification, not at startup.
+
 ### Mandatory `require`
 
 Hosted issuers are often multi-tenant: one issuer signs for every customer of the provider, and the audience is usually chosen by whoever requests the token. Anyone with an account there can mint a token carrying your audience. **Issuer and audience alone authenticate nobody.**
