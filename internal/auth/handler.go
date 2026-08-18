@@ -22,12 +22,22 @@ const (
 	tokenField = 1
 )
 
+// DefaultTimeout bounds one verification. A token naming a key the provider has
+// not published sends go-oidc to refetch the key set on the request path, over
+// an HTTP client with no timeout of its own, so without this a provider that
+// accepts connections and never answers would pin the request forever. Squid
+// only has children x concurrency slots, and a token needs no valid signature to
+// reach this path, so unbounded waits are a way to stop authentication entirely.
+const DefaultTimeout = 10 * time.Second
+
 // Handler verifies the credential in each request and reports the result.
 type Handler struct {
 	Logger *slog.Logger
 	// Now defaults to time.Now. Tests set it to make the ttl= they assert on
 	// deterministic.
-	Now      func() time.Time
+	Now func() time.Time
+	// Timeout defaults to DefaultTimeout.
+	Timeout  time.Duration
 	Verifier Verifier
 }
 
@@ -37,6 +47,14 @@ func (h *Handler) Handle(ctx context.Context, req protocol.Request) protocol.Res
 	if token == "" {
 		return h.reject(req, "no credential supplied")
 	}
+
+	timeout := h.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	result, err := h.Verifier.Verify(ctx, token)
 	if err != nil {
