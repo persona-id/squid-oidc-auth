@@ -33,6 +33,7 @@
       "description": "Low-risk: GitHub Actions minor and patch",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch"],
+      "minimumReleaseAge": "7 days",
       "addLabels": ["automerge"],
       "automerge": true,
       "platformAutomerge": true
