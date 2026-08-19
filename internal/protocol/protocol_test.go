@@ -3,7 +3,6 @@ package protocol_test
 import (
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -31,9 +30,16 @@ func TestParseRequest(t *testing.T) {
 			wantFields: []string{"bk", "token"},
 			wantID:     42,
 		},
-		"channel ID is a field when not concurrent": {
-			line:       "42 bk token",
-			wantFields: []string{"42", "bk", "token"},
+		// Squid sends two fields for basic auth, so a third led by a number
+		// means channel IDs are arriving that this helper is not consuming.
+		"channel ID arriving without --concurrent": {
+			line:    "42 bk token",
+			wantErr: protocol.ErrChannelMismatch,
+		},
+		// A numeric login is not a channel ID: there are only two fields.
+		"numeric login is not mistaken for a channel ID": {
+			line:       "42 token",
+			wantFields: []string{"42", "token"},
 			wantID:     protocol.NoChannel,
 		},
 		"percent-encoded fields are decoded": {
@@ -55,10 +61,10 @@ func TestParseRequest(t *testing.T) {
 			line:    "   ",
 			wantErr: protocol.ErrEmptyRequest,
 		},
-		"non-numeric channel ID": {
+		"no channel ID arriving with --concurrent": {
 			concurrent: true,
 			line:       "abc bk token",
-			wantErr:    strconv.ErrSyntax,
+			wantErr:    protocol.ErrChannelMismatch,
 		},
 	}
 

@@ -26,6 +26,8 @@ With `concurrency=N` configured, every line is prefixed with a channel ID:
 
 The helper must echo that ID on the corresponding response. This is what lets Squid keep several lookups in flight over one pipe but why a response that accidentally spans two lines can be a problem.
 
+Squid sends exactly the fields its configuration implies, so the helper can tell when `--concurrent` and `concurrency=` disagree: a channel ID where none is expected shows up as a third field led by a number, and a missing one as a first field that is not a number. Either way it answers `BH` and logs which side to change, rather than reading the login as the credential and denying every request.
+
 ### Responses
 
 ```

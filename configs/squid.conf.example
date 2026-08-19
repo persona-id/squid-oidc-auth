@@ -8,7 +8,10 @@
 # Authentication
 # ---------------------------------------------------------------------------
 
-# --concurrent must be present if and only if concurrency= is set below.
+# --concurrent must be present if and only if concurrency= is set below. Get it
+# wrong either way and the helper detects the mismatch, answers BH, and logs
+# which side to change; without that check the reverse case would read the login
+# as the credential and quietly deny every request.
 auth_param basic program /usr/local/bin/squid-oidc-auth --concurrent --config /etc/squid-oidc-auth.yaml
 auth_param basic children 8 startup=2 idle=1 concurrency=16
 auth_param basic realm OIDC proxy
