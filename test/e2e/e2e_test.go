@@ -383,3 +383,31 @@ func TestTTLNeverExceedsTokenLifetime(t *testing.T) {
 		t.Errorf("ttl = %d, want it in (0, 20]", ttl)
 	}
 }
+
+// TestRejectsPositionalArguments covers a config path passed without --config.
+// Flag parsing stops at the first bare argument, so the helper would otherwise
+// run with the default config and silently drop every flag after it, including
+// --concurrent, whose absence turns every request into a rejection.
+func TestRejectsPositionalArguments(t *testing.T) {
+	t.Parallel()
+
+	_, configPath := newIssuer(t)
+
+	cmd := exec.CommandContext(t.Context(), helperPath, configPath, "--concurrent")
+	cmd.Stdin = strings.NewReader("")
+
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("helper exited 0, want a non-zero status; output: %s", output)
+	}
+
+	if !strings.Contains(string(output), "unexpected argument") {
+		t.Errorf("output = %s, want it to name the unexpected argument", output)
+	}
+
+	// The default config path must not appear: naming a file the operator never
+	// mentioned is what made this confusing in the first place.
+	if strings.Contains(string(output), "/etc/squid-oidc-auth.yaml") {
+		t.Errorf("output = %s, want it not to blame the default config path", output)
+	}
+}

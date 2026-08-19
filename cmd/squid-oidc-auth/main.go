@@ -50,6 +50,17 @@ func run() error {
 
 	flag.Parse()
 
+	// Flag parsing stops at the first bare argument, so anything after one is
+	// silently dropped, leaving the helper running with defaults it was never
+	// asked for. Refuse rather than start half-configured.
+	if flag.NArg() > 0 {
+		return fmt.Errorf(
+			"unexpected argument %q: this helper takes flags only, and parsing stops at the "+
+				"first bare argument, so any flag after it would be ignored",
+			flag.Arg(0),
+		)
+	}
+
 	level, err := parseLevel(*logLevel)
 	if err != nil {
 		return err
