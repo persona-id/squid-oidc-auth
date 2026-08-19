@@ -7,7 +7,14 @@ archives:
       - docs/*
     formats:
       - tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
 
 before:
   hooks:
@@ -52,7 +59,7 @@ dockers_v2:
       org.opencontainers.image.description: >-
         Squid authentication helper accepting OIDC tokens as the proxy password.
         Not a service: copy the binary into your Squid image.
-      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.licenses: BSD 3-Clause
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.source: "{{ .GitURL }}"
       org.opencontainers.image.title: "{{ .ProjectName }}"
