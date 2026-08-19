@@ -10,7 +10,18 @@
 
 # --concurrent must be present if and only if concurrency= is set below.
 auth_param basic program /usr/local/bin/squid-oidc-auth --concurrent --config /etc/squid-oidc-auth.yaml
-auth_param basic children 8 startup=2 idle=1 concurrency=16
+
+# The number that matters is children x concurrency, the requests that can be in
+# flight at once. Verification is not the constraint - one process measured about
+# 28,000 checks a second - so size this for how many lookups may be waiting on
+# the provider at once, not for throughput. A token naming an unpublished key
+# makes the helper refetch the key set, and that request holds its slot until the
+# fetch returns or the helper's 10s timeout fires.
+#
+# Prefer raising concurrency= over children: every child is a separate process
+# that runs its own discovery at startup and keeps its own key cache, so children
+# buys isolation from a wedged process, not speed.
+auth_param basic children 4 startup=2 idle=1 concurrency=32
 auth_param basic realm OIDC proxy
 
 # Squid caches credentials by user+password for this long without re-consulting

@@ -396,3 +396,48 @@ issuers:
 		})
 	}
 }
+
+// TestHandleBoundsVerification covers a provider that accepts the connection and
+// never answers. go-oidc refetches the key set on the request path whenever a
+// token names an unknown key, over an HTTP client with no timeout, and a token
+// needs no valid signature to reach that path. Unbounded, a handful of such
+// requests would occupy every helper slot and stop authentication proxy-wide.
+func TestHandleBoundsVerification(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(&blockingVerifier{})
+	handler.Timeout = 50 * time.Millisecond
+
+	done := make(chan string, 1)
+
+	go func() {
+		got, err := handler.Handle(t.Context(), request("bk", "token")).Encode()
+		if err != nil {
+			done <- "encode error: " + err.Error()
+
+			return
+		}
+
+		done <- got
+	}()
+
+	select {
+	case got := <-done:
+		// BH, not ERR: the helper could not reach a verdict, which is an
+		// environment failure rather than a bad credential.
+		if want := `BH message="verification unavailable"`; got != want {
+			t.Errorf("Handle() = %q, want %q", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Handle() did not return, want it bounded by Timeout")
+	}
+}
+
+// blockingVerifier stands in for an identity provider that never answers.
+type blockingVerifier struct{}
+
+func (b *blockingVerifier) Verify(ctx context.Context, _ string) (*oidc.Result, error) {
+	<-ctx.Done()
+
+	return nil, &oidc.TemporaryError{Err: ctx.Err()}
+}
