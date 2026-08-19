@@ -33,15 +33,24 @@ const (
 // without concurrency, where lines carry no channel prefix.
 const NoChannel = -1
 
+// basicAuthFields is how many fields a basic authentication request carries
+// without a channel prefix: the login and the credential.
+const basicAuthFields = 2
+
 var (
-	// ErrEmptyRequest reports a blank request line.
-	ErrEmptyRequest = errors.New("empty request line")
+	// ErrChannelMismatch reports a request whose shape contradicts the helper's
+	// concurrency setting. Squid always sends exactly the fields its
+	// configuration implies, so this is a mismatch between --concurrent and
+	// concurrency= rather than anything a client can provoke.
+	ErrChannelMismatch = errors.New("request does not match the helper's concurrency setting")
 	// ErrControlCharacter reports a response carrying a character that cannot
 	// survive a line-oriented protocol. Quoting cannot rescue these: a newline
 	// inside a value would emit a second line that Squid reads as an additional
 	// response, which under concurrency lets attacker-influenced claim data
 	// forge an answer to a request the helper never saw.
 	ErrControlCharacter = errors.New("value contains a control character")
+	// ErrEmptyRequest reports a blank request line.
+	ErrEmptyRequest = errors.New("empty request line")
 	// ErrInvalidKey reports a key that is not a bare token, and so cannot be
 	// distinguished from the value once written.
 	ErrInvalidKey = errors.New("key is empty or contains a reserved character")
@@ -76,11 +85,25 @@ func ParseRequest(line string, concurrent bool) (Request, error) {
 	if concurrent {
 		id, err := strconv.Atoi(fields[0])
 		if err != nil {
-			return req, fmt.Errorf("parsing channel ID %q: %w", fields[0], err)
+			return req, fmt.Errorf(
+				"%w: expected a channel ID first but got %q; "+
+					"the helper was started with --concurrent, so squid.conf needs concurrency= on this helper",
+				ErrChannelMismatch, fields[0],
+			)
 		}
 
 		req.ChannelID = id
 		fields = fields[1:]
+	} else if len(fields) > basicAuthFields && isNumeric(fields[0]) {
+		// Squid sends exactly the fields its configuration implies, and a basic
+		// authentication request carries two. A third, led by a number, means
+		// channel IDs are arriving that this helper is not consuming - which
+		// would otherwise read the login as the credential and deny everything.
+		return req, fmt.Errorf(
+			"%w: got %d fields led by %q, which looks like a channel ID; "+
+				"squid.conf sets concurrency= on this helper but it was started without --concurrent",
+			ErrChannelMismatch, len(fields), fields[0],
+		)
 	}
 
 	req.Fields = make([]string, 0, len(fields))
@@ -165,6 +188,22 @@ func ValidKey(key string) bool {
 // is not a control character; quoting handles it.
 func isControl(r rune) bool {
 	return r < ' ' || r == 0x7f
+}
+
+// isNumeric reports whether field is entirely digits, which is what a channel
+// ID looks like.
+func isNumeric(field string) bool {
+	if field == "" {
+		return false
+	}
+
+	for _, r := range field {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
 }
 
 // quote wraps a value in double quotes when it would otherwise break the
