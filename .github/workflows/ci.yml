@@ -57,6 +57,25 @@ jobs:
       - name: Lint
         run: make lint
 
+  renovate:
+    name: Validate Renovate config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 'lts/*'
+
+      # No file argument: passing one explicitly makes the validator treat the file as
+      # a global config, which permits options that are invalid in a repository config.
+      # Auto-discovery picks up renovate.json and validates it as the repo config it is.
+      #
+      # --strict fails on warnings too, so deprecated or ignored options surface here
+      # rather than silently changing what Renovate does.
+      - run: npx --yes --package renovate -- renovate-config-validator --strict
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:
