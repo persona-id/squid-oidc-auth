@@ -5,7 +5,7 @@
 # bring up a complete, working proxy in one command.
 
 # Kept in step with .tool-versions by `make check-versions`.
-ARG GO_VERSION=1.26.6
+ARG GO_VERSION=1.27.1
 
 FROM golang:${GO_VERSION} AS build
 
