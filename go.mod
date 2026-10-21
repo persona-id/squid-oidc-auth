@@ -3,7 +3,7 @@ module github.com/persona-id/squid-oidc-auth
 go 1.26
 
 require (
-	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
